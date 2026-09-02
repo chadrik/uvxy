@@ -172,9 +172,11 @@ fn drift_the_completion_script_still_holds_the_arity_markers() {
         )
     });
 
-    // `'--from=[Use the given package to provide the command]:FROM:_default'`
+    // `'--from=[Use the given package to provide the command]:FROM:'`
     // The `=` and the `:FROM:` marker together declare that `--from` consumes
-    // the argument after it.
+    // the argument after it. A completion function may follow the marker. uv
+    // 0.8.17 wrote `_default` there, and uv 0.12.9 writes nothing. The parser
+    // reads the marker, so this test reads the marker too.
     let from = section
         .iter()
         .map(|line| line.trim())
@@ -183,12 +185,12 @@ fn drift_the_completion_script_still_holds_the_arity_markers() {
         panic!("the `uv tool run` section declares no `'--from=[...]` entry. {DRIFT}")
     });
     assert!(
-        from.contains("]:FROM:_default'"),
-        "the `--from` entry no longer carries the `:FROM:_default` arity \
-         marker. {DRIFT}\n{from}"
+        from.contains("]:FROM:"),
+        "the `--from` entry no longer carries the `:FROM:` arity marker. \
+         {DRIFT}\n{from}"
     );
 
-    // `'*--with=[Run with the given packages installed]:WITH:_default'`
+    // `'*--with=[Run with the given packages installed]:WITH:'`
     // The leading `*` marks a repeatable flag. The arity marker follows the
     // description, exactly as it does for a flag that appears once.
     let with = section
@@ -202,9 +204,9 @@ fn drift_the_completion_script_still_holds_the_arity_markers() {
         )
     });
     assert!(
-        with.contains("]:WITH:_default'"),
-        "the `--with` entry no longer carries the `:WITH:_default` arity \
-         marker. {DRIFT}\n{with}"
+        with.contains("]:WITH:"),
+        "the `--with` entry no longer carries the `:WITH:` arity marker. \
+         {DRIFT}\n{with}"
     );
 
     // A flag that takes no value carries no marker. The parser reads the

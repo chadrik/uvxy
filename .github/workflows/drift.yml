@@ -76,7 +76,8 @@ jobs:
             echo "The drift check failed against uv \`${{ steps.uv-version.outputs.version }}\`."
             echo
             echo "uvxy reads flag arity from \`uv generate-shell-completion zsh\`."
-            echo "That output no longer yields a usable flag arity table."
+            echo "One or more drift tests failed. Read the test output above for the"
+          echo "assertion that failed, and for what changed."
             echo
             echo "Next steps:"
             echo "1. Run \`uv generate-shell-completion zsh\` and read the new output."

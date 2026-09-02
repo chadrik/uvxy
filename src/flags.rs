@@ -386,6 +386,52 @@ fn write_cache(file: &Path, key: &str, table: &FlagTable) -> std::io::Result<()>
 mod tests {
     use super::*;
 
+    /// The same `uv tool run` section, in the shape that uv 0.12.9 writes.
+    ///
+    /// uv 0.12.9 ends an arity marker at the second colon. uv 0.8.17 wrote a
+    /// completion function after that colon, and it named that function
+    /// `_default`. The parser reads the marker, and it ignores what follows.
+    const ZSH_COMPLETION_0_12: &str = r##"#compdef uv
+
+    case $state in
+    (tool)
+        curcontext="${curcontext%:*:*}:uv-tool-command-$line[1]:"
+        case $line[1] in
+            (run)
+_arguments "${_arguments_options[@]}" : \
+'--from=[Use the given package to provide the command]:FROM:' \
+'*--with=[Run with the given packages installed]:WITH:' \
+'-p+[The Python interpreter to use]:PYTHON:' \
+'--python=[The Python interpreter to use]:PYTHON:' \
+'--isolated[Run the tool in an isolated virtual environment \[env\: UV_ISOLATED=\]]' \
+'--no-config[Avoid discovering configuration files]' \
+"*::command:_default" \
+&& ret=0
+;;
+(uvx)
+_arguments "${_arguments_options[@]}" : \
+'--decoy-uvx=[This flag belongs to uvx, and not to uv tool run]:DECOY:' \
+&& ret=0
+;;
+"##;
+
+    #[test]
+    fn parse_reads_the_marker_when_no_completion_function_follows_it() {
+        // uv 0.12.9 dropped the `_default` suffix. The drift check found this
+        // change. The parser must read both shapes.
+        let table = parse_zsh_completion(ZSH_COMPLETION_0_12).unwrap();
+        for flag in ["--from", "--with", "--python", "-p"] {
+            assert!(table.takes_value(flag), "`{flag}` must take a value");
+        }
+        for flag in ["--isolated", "--no-config"] {
+            assert!(!table.takes_value(flag), "`{flag}` must take no value");
+        }
+        assert!(
+            !table.takes_value("--decoy-uvx"),
+            "a flag from the uvx section must not reach the table"
+        );
+    }
+
     /// An excerpt of the real output of `uv generate-shell-completion zsh`,
     /// from uv 0.8.17.
     ///
