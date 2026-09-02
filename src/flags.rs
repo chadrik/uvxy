@@ -386,6 +386,142 @@ fn write_cache(file: &Path, key: &str, table: &FlagTable) -> std::io::Result<()>
 mod tests {
     use super::*;
 
+    /// The newest release on each of the five most recent uv minor lines.
+    ///
+    /// Each entry holds a version, an excerpt of that version's zsh completion
+    /// script, and the number of value-taking flags that the excerpt declares.
+    ///
+    /// Each excerpt copies the whole `uv tool run` section, and it shortens
+    /// the two neighbouring sections. A check confirmed that an excerpt and
+    /// its whole script produce the same table for every version here.
+    const RELEASE_LINES: &[(&str, &str, usize)] = &[
+        (
+            "0.8.24",
+            include_str!("../tests/fixtures/completions/uv-0.8.24.zsh"),
+            49,
+        ),
+        (
+            "0.9.30",
+            include_str!("../tests/fixtures/completions/uv-0.9.30.zsh"),
+            51,
+        ),
+        (
+            "0.10.12",
+            include_str!("../tests/fixtures/completions/uv-0.10.12.zsh"),
+            51,
+        ),
+        (
+            "0.11.33",
+            include_str!("../tests/fixtures/completions/uv-0.11.33.zsh"),
+            52,
+        ),
+        (
+            "0.12.9",
+            include_str!("../tests/fixtures/completions/uv-0.12.9.zsh"),
+            53,
+        ),
+    ];
+
+    /// Every release above declares these flags with a value. `uvxy` reads the
+    /// argument after each one.
+    const CORE_VALUE_FLAGS: &[&str] = &[
+        "--from",
+        "--with",
+        "-w",
+        "--python",
+        "-p",
+        "--constraints",
+        "-c",
+        "--with-requirements",
+        "--index",
+        "--exclude-newer",
+    ];
+
+    /// Every release above declares these flags without a value. `uvxy` reads
+    /// the argument after each one as the command.
+    const CORE_BOOLEAN_FLAGS: &[&str] = &["--isolated", "--no-config", "--offline", "--refresh"];
+
+    /// `uv run` declares these flags with a value. `uv tool run` declares none
+    /// of them. A table that holds one of them read the wrong section.
+    const UV_RUN_ONLY_FLAGS: &[&str] = &[
+        "--only-group",
+        "--extra",
+        "--group",
+        "--no-extra",
+        "--no-group",
+    ];
+
+    #[test]
+    fn parse_reads_every_supported_uv_release() {
+        for (version, script, count) in RELEASE_LINES {
+            let table = parse_zsh_completion(script)
+                .unwrap_or_else(|err| panic!("uv {version}: the parser failed: {err:#}"));
+
+            assert_eq!(
+                table.len(),
+                *count,
+                "uv {version}: the table holds {} flags, and it must hold {count}",
+                table.len()
+            );
+
+            for flag in CORE_VALUE_FLAGS {
+                assert!(
+                    table.takes_value(flag),
+                    "uv {version}: `{flag}` must take a value"
+                );
+            }
+            for flag in CORE_BOOLEAN_FLAGS {
+                assert!(
+                    !table.takes_value(flag),
+                    "uv {version}: `{flag}` must take no value"
+                );
+            }
+            for flag in UV_RUN_ONLY_FLAGS {
+                assert!(
+                    !table.takes_value(flag),
+                    "uv {version}: `{flag}` belongs to `uv run`, so the parser \
+                     read the wrong section"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn parse_reads_the_flags_of_the_release_in_front_of_it() {
+        // A hard-coded list cannot pass this test. Each release declares a
+        // different set, and the parser must report each set.
+        let table_of = |version: &str| {
+            let (_, script, _) = RELEASE_LINES
+                .iter()
+                .find(|(v, _, _)| *v == version)
+                .expect("a known version");
+            parse_zsh_completion(script).expect("a table")
+        };
+
+        // uv added `--torch-backend` after the 0.8 line.
+        assert!(!table_of("0.8.24").takes_value("--torch-backend"));
+        for version in ["0.9.30", "0.10.12", "0.11.33", "0.12.9"] {
+            assert!(
+                table_of(version).takes_value("--torch-backend"),
+                "uv {version}: `--torch-backend` must take a value"
+            );
+        }
+
+        // uv added `--upgrade-group` after the 0.10 line.
+        for version in ["0.8.24", "0.9.30", "0.10.12"] {
+            assert!(
+                !table_of(version).takes_value("--upgrade-group"),
+                "uv {version}: `--upgrade-group` did not exist yet"
+            );
+        }
+        for version in ["0.11.33", "0.12.9"] {
+            assert!(
+                table_of(version).takes_value("--upgrade-group"),
+                "uv {version}: `--upgrade-group` must take a value"
+            );
+        }
+    }
+
     /// The same `uv tool run` section, in the shape that uv 0.12.9 writes.
     ///
     /// uv 0.12.9 ends an arity marker at the second colon. uv 0.8.17 wrote a

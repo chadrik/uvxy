@@ -34,6 +34,30 @@ We rejected it for two reasons:
 2. Its output is a Rust `Debug` dump of an internal struct, behind a hidden
    flag. Astral can change it in any release.
 
+## Which uv releases this covers
+
+`tests/fixtures/completions/` holds an excerpt of the completion script from the
+newest release on each of the five most recent uv minor lines. A unit test reads
+each excerpt, and it asserts the arity table that the excerpt declares.
+
+| uv line | Release tested | Value-taking flags |
+|---------|----------------|--------------------|
+| 0.12.x  | 0.12.9         | 53                 |
+| 0.11.x  | 0.11.33        | 52                 |
+| 0.10.x  | 0.10.12        | 51                 |
+| 0.9.x   | 0.9.30         | 51                 |
+| 0.8.x   | 0.8.24         | 49                 |
+
+These tests need no network and no uv. They run on every pull request. They
+answer a different question from the drift check. The drift check asks whether
+the newest uv still parses. These tests ask whether a change to the parser still
+reads the releases that people run today.
+
+Each excerpt copies the whole `uv tool run` section. It shortens the `uv run`
+section before it and the `uvx` section after it, which cuts 2.5 MB of fixtures
+to 96 KB. A check confirmed that each excerpt and its whole script produce the
+same table.
+
 ## Consequences
 
 - `uvxy` owns a parse loop. That loop must handle `--flag=value`, the `--`
