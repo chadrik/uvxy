@@ -41,7 +41,7 @@ pub const SEED_FLAGS: &[&str] = &[
 
 /// The mappings that most tests read.
 pub const DEFAULT_CONFIG: &str = "\
-[from]
+[commands]
 sphinx-build = \"sphinx\"
 mytool = \"acme-mytool\"
 pinned = \"acme-pinned==2.1\"

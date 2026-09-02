@@ -26,9 +26,9 @@ uvxy reads its own flags from the --uvxy- namespace:
   --uvxy-version   Print the uvxy version
   --uvxy-explain   Print the command uvxy would run, and do not run it
 
-uvxy reads mappings from the [from] table of uvxy.toml:
+uvxy reads mappings from the [commands] table of uvxy.toml:
 
-  [from]
+  [commands]
   sphinx-build = \"sphinx\"
 ";
 

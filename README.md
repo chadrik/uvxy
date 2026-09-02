@@ -60,7 +60,7 @@ directory.
 Copy this table into `uvxy.toml`:
 
 ```toml
-[from]
+[commands]
 aws = "awscli"
 ansible-playbook = "ansible-core"
 chardetect = "chardet"
@@ -87,7 +87,7 @@ that `uvxy` gives to `--from`, so it accepts any requirement that `--from`
 accepts, including a version:
 
 ```toml
-[from]
+[commands]
 mytool = "acme-mytool==2.1"
 ```
 

@@ -29,7 +29,7 @@ could add `--version` in any release, and `uvxy` would then shadow it.
 `uvxy` replaces `uvx`. It replaces no other uv command.
 
 `uv tool install` needs the same knowledge in reverse. A user who wants
-`ansible-playbook` must install `ansible`. The `[from]` table holds that pair.
+`ansible-playbook` must install `ansible`. The `[commands]` table holds that pair.
 We still do not use it there. `uv tool install` takes a package and has no
 `--from` flag, so `uvxy` would translate a name rather than synthesize an
 argument. That is a different feature. It would also end the guarantee above,

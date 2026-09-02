@@ -87,7 +87,8 @@ fn drift_the_real_uv_still_yields_a_correct_flag_table() {
 
     let dir = tempfile::tempdir().expect("a temporary directory");
     let config = dir.path().join("uvxy.toml");
-    std::fs::write(&config, "[from]\nmytool = \"acme-mytool\"\n").expect("a configuration file");
+    std::fs::write(&config, "[commands]\nmytool = \"acme-mytool\"\n")
+        .expect("a configuration file");
 
     // `--uvxy-explain` prints the plan and runs no tool, so this test installs
     // nothing and reaches no network.
@@ -128,7 +129,8 @@ fn drift_a_flag_value_that_repeats_the_command_still_resolves() {
 
     let dir = tempfile::tempdir().expect("a temporary directory");
     let config = dir.path().join("uvxy.toml");
-    std::fs::write(&config, "[from]\nmytool = \"acme-mytool\"\n").expect("a configuration file");
+    std::fs::write(&config, "[commands]\nmytool = \"acme-mytool\"\n")
+        .expect("a configuration file");
 
     let output = Command::new(UVXY)
         .args(["--uvxy-explain", "--with", "mytool", "mytool"])

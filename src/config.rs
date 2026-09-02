@@ -65,30 +65,31 @@ pub fn config_paths() -> Vec<PathBuf> {
     }
 }
 
-/// Read the `[from]` table out of one file's text.
+/// Read the `[commands]` table out of one file's text.
 ///
 /// Each key is a command. Each value is a package spec string. Match a key
 /// exactly, and never normalize it. Return an error when the text does not
-/// parse, when `[from]` is not a table, or when a value is not a string.
+/// parse, when `[commands]` is not a table, or when a value is not a string.
 pub fn parse(text: &str) -> anyhow::Result<Mappings> {
     let document: toml::Table = text.parse().context("the text is not valid TOML")?;
 
-    // A file without a `[from]` table holds no mapping. That is not an error.
-    let Some(from) = document.get("from") else {
+    // A file without a `[commands]` table holds no mapping. That is not an
+    // error.
+    let Some(commands) = document.get("commands") else {
         return Ok(Mappings::new());
     };
-    let from = from.as_table().ok_or_else(|| {
+    let commands = commands.as_table().ok_or_else(|| {
         anyhow!(
-            "`from` holds {}, and `from` must hold a table",
-            article(from.type_str())
+            "`commands` holds {}, and `commands` must hold a table",
+            article(commands.type_str())
         )
     })?;
 
     let mut mappings = Mappings::new();
-    for (command, spec) in from {
+    for (command, spec) in commands {
         let spec = spec.as_str().ok_or_else(|| {
             anyhow!(
-                "`from.{command}` holds {}, and every value must hold a string",
+                "`commands.{command}` holds {}, and every value must hold a string",
                 article(spec.type_str())
             )
         })?;
@@ -207,7 +208,7 @@ mod tests {
     #[test]
     fn parse_reads_every_mapping() {
         let text = r#"
-            [from]
+            [commands]
             sphinx-build = "sphinx"
             aws = "awscli"
             ansible-playbook = "ansible-core>=2.16"
@@ -235,14 +236,14 @@ mod tests {
 
     #[test]
     fn parse_accepts_an_empty_from_table() {
-        assert!(parse("[from]\n").unwrap().is_empty());
+        assert!(parse("[commands]\n").unwrap().is_empty());
     }
 
     #[test]
     fn parse_keeps_a_key_exactly() {
         // A normalizing reader would merge these three keys into one.
         let text = r#"
-            [from]
+            [commands]
             Sphinx_Build = "a"
             sphinx-build = "b"
             "sphinx.build" = "c"
@@ -255,22 +256,22 @@ mod tests {
     }
 
     #[test]
-    fn parse_rejects_a_from_table_that_is_not_a_table() {
-        let err = parse("from = \"sphinx\"\n").unwrap_err().to_string();
-        assert!(err.contains("`from`"), "{err}");
+    fn parse_rejects_a_commands_table_that_is_not_a_table() {
+        let err = parse("commands = \"sphinx\"\n").unwrap_err().to_string();
+        assert!(err.contains("`commands`"), "{err}");
         assert!(err.contains("table"), "{err}");
     }
 
     #[test]
     fn parse_rejects_a_value_that_is_not_a_string() {
         for text in [
-            "[from]\nsphinx-build = 3\n",
-            "[from]\nsphinx-build = true\n",
-            "[from]\nsphinx-build = [\"sphinx\"]\n",
-            "[from]\n[from.sphinx-build]\nname = \"sphinx\"\n",
+            "[commands]\nsphinx-build = 3\n",
+            "[commands]\nsphinx-build = true\n",
+            "[commands]\nsphinx-build = [\"sphinx\"]\n",
+            "[commands]\n[commands.sphinx-build]\nname = \"sphinx\"\n",
         ] {
             let err = parse(text).unwrap_err().to_string();
-            assert!(err.contains("from.sphinx-build"), "{err}");
+            assert!(err.contains("commands.sphinx-build"), "{err}");
             assert!(err.contains("string"), "{err}");
         }
     }
@@ -280,8 +281,8 @@ mod tests {
         for text in [
             "[from\nsphinx-build = \"sphinx\"\n",
             "this is not toml [[[\n",
-            "[from]\nsphinx-build =\n",
-            "[from]\nsphinx-build = \"sphinx\"\n[from]\naws = \"awscli\"\n",
+            "[commands]\nsphinx-build =\n",
+            "[commands]\nsphinx-build = \"sphinx\"\n[commands]\naws = \"awscli\"\n",
         ] {
             assert!(parse(text).is_err(), "{text}");
         }
@@ -303,12 +304,12 @@ mod tests {
         let system = write(
             dir.path(),
             "system.toml",
-            "[from]\naws = \"awscli\"\nsphinx-build = \"sphinx==7\"\n",
+            "[commands]\naws = \"awscli\"\nsphinx-build = \"sphinx==7\"\n",
         );
         let user = write(
             dir.path(),
             "user.toml",
-            "[from]\nsphinx-build = \"sphinx==8\"\npygmentize = \"pygments\"\n",
+            "[commands]\nsphinx-build = \"sphinx==8\"\npygmentize = \"pygments\"\n",
         );
 
         let config = load_from(None, &[system.clone(), user.clone()]).unwrap();
@@ -332,7 +333,7 @@ mod tests {
     #[test]
     fn load_from_skips_an_absent_path() {
         let dir = tempfile::tempdir().unwrap();
-        let user = write(dir.path(), "user.toml", "[from]\naws = \"awscli\"\n");
+        let user = write(dir.path(), "user.toml", "[commands]\naws = \"awscli\"\n");
         let absent = dir.path().join("system.toml");
 
         let config = load_from(None, &[absent, user.clone()]).unwrap();
@@ -344,7 +345,7 @@ mod tests {
     #[test]
     fn load_from_names_the_file_that_does_not_parse() {
         let dir = tempfile::tempdir().unwrap();
-        let bad = write(dir.path(), "user.toml", "[from]\naws = 3\n");
+        let bad = write(dir.path(), "user.toml", "[commands]\naws = 3\n");
 
         let err = load_from(None, std::slice::from_ref(&bad)).unwrap_err();
         let text = format!("{err:#}");
@@ -356,9 +357,13 @@ mod tests {
     #[test]
     fn load_from_replaces_every_path_with_the_explicit_file() {
         let dir = tempfile::tempdir().unwrap();
-        let system = write(dir.path(), "system.toml", "[from]\naws = \"awscli\"\n");
-        let user = write(dir.path(), "user.toml", "[from]\naws = \"awscli-v2\"\n");
-        let explicit = write(dir.path(), "explicit.toml", "[from]\nblack = \"black\"\n");
+        let system = write(dir.path(), "system.toml", "[commands]\naws = \"awscli\"\n");
+        let user = write(dir.path(), "user.toml", "[commands]\naws = \"awscli-v2\"\n");
+        let explicit = write(
+            dir.path(),
+            "explicit.toml",
+            "[commands]\nblack = \"black\"\n",
+        );
 
         let config = load_from(Some(explicit.clone()), &[system, user]).unwrap();
 

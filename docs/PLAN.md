@@ -25,7 +25,7 @@ Four tasks run in parallel. Each task owns one file.
 
 | File            | Task                                                          |
 |-----------------|---------------------------------------------------------------|
-| `src/config.rs` | Find `uvxy.toml`. Read `[from]`. Merge system under user.      |
+| `src/config.rs` | Find `uvxy.toml`. Read `[commands]`. Merge system under user.      |
 | `src/flags.rs`  | Read arity from `uv generate-shell-completion zsh`. Cache it.  |
 | `src/rewrite.rs`| Find the command. Insert `--from`. Handle `@version` and `--`. |
 | `src/uvbin.rs`  | Find the `uv` binary. Replace the process with it.             |
@@ -38,7 +38,7 @@ Four tasks run in parallel. Each task owns one file.
   command name. The user file wins.
 - Paths follow uv. Use `$XDG_CONFIG_HOME/uv/uvxy.toml`, `/etc/uv/uvxy.toml`,
   and `%APPDATA%\uv\uvxy.toml`.
-- Read the `[from]` table. Each key is a command. Each value is a package spec
+- Read the `[commands]` table. Each key is a command. Each value is a package spec
   string.
 - Match a key exactly. Do not normalize the key.
 - Exit with an error if a file exists and does not parse.
@@ -133,7 +133,7 @@ from phase 0.
 
 - State the problem. `uvx` infers a package name from the command.
 - Show the configuration file and its location.
-- Give an example `[from]` table. Include `aws`, `sphinx-build`,
+- Give an example `[commands]` table. Include `aws`, `sphinx-build`,
   `ansible-playbook`, and `pygmentize`.
 - List the `--uvxy-` flags.
 - State that `uvxy` accepts every `uvx` argument.
