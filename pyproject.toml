@@ -1,0 +1,27 @@
+[build-system]
+requires = ["maturin>=1.9,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "uvxy"
+description = "Run uvx with a --from argument that comes from a configuration file."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = ["uv", "uvx", "packaging", "cli"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Rust",
+    "Topic :: Software Development",
+]
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/chadrik/uvxy"
+
+[tool.maturin]
+bindings = "bin"
+strip = true
