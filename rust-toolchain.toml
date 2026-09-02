@@ -1,0 +1,10 @@
+# uvxy pins the toolchain so that a build gives the same result on every
+# machine and on every day. A new Rust release adds new clippy lints, and an
+# unpinned toolchain turns a pull request red for a reason that the pull
+# request did not cause.
+#
+# The Drift workflow runs the same checks against the newest stable Rust every
+# day. That job reports a new lint. Raise this version when you act on it.
+[toolchain]
+channel = "1.89.0"
+components = ["rustfmt", "clippy"]

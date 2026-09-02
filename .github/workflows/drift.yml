@@ -8,6 +8,8 @@ on:
     # Run every day at 06:17 UTC.
     - cron: "17 6 * * *"
   workflow_dispatch:
+  # TEMPORARY: prove the pinning changes on the pull request. Remove after.
+  pull_request:
 
 permissions:
   contents: read
@@ -52,8 +54,8 @@ jobs:
       - name: Confirm that a drift test exists
         run: |
           set -euo pipefail
-          cargo test --no-run
-          cargo test -- --list | tee test-list.txt
+          cargo test --locked --no-run
+          cargo test --locked -- --list | tee test-list.txt
           if ! grep -qi drift test-list.txt; then
             echo "::error title=No drift test::cargo test lists no test with 'drift' in its name. This workflow monitors nothing. Add the drift test to tests/ or fix this workflow."
             exit 1
@@ -63,7 +65,7 @@ jobs:
       # a filter can miss it. UVXY_DRIFT=1 stops the drift test from skipping.
       - name: Run the test suite against the current uv release
         id: drift-test
-        run: cargo test -- --nocapture
+        run: cargo test --locked -- --nocapture
 
       - name: Report the drift failure
         if: failure() && steps.drift-test.outcome == 'failure'
@@ -83,4 +85,58 @@ jobs:
             echo "3. Update \`docs/adr/0002-derive-flag-arity-from-shell-completions.md\` if the approach no longer holds."
           } >> "$GITHUB_STEP_SUMMARY"
           echo "::error title=uv changed its completion format::uvxy cannot build a flag table from uv ${{ steps.uv-version.outputs.version }}. Read the job summary."
+          exit 1
+
+  # rust-toolchain.toml pins the toolchain, so a new Rust release cannot turn a
+  # pull request red. This job reads the newest stable Rust instead, and it
+  # reports a new lint here rather than in somebody's pull request.
+  rust:
+    name: newest stable Rust check
+    runs-on: ubuntu-latest
+    env:
+      # rust-toolchain.toml wins over the toolchain that the action installs.
+      # This variable wins over rust-toolchain.toml.
+      RUSTUP_TOOLCHAIN: stable
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          cache-key: drift-stable
+
+      - name: Record the Rust version
+        id: version
+        run: |
+          set -euo pipefail
+          rustc --version | tee rust-version.txt
+          echo "rust=$(rustc --version)" >> "$GITHUB_OUTPUT"
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Run the tests
+        run: cargo test --locked
+
+      - name: Report the Rust drift
+        if: failure()
+        run: |
+          set -euo pipefail
+          {
+            echo "## The newest stable Rust rejects this code"
+            echo
+            echo "The check failed under \`${{ steps.version.outputs.rust }}\`."
+            echo "\`rust-toolchain.toml\` pins an older version, so pull"
+            echo "requests still pass."
+            echo
+            echo "Next steps:"
+            echo "1. Read the clippy output above."
+            echo "2. Fix the code."
+            echo "3. Raise the channel in \`rust-toolchain.toml\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=Newest stable Rust rejects this code::Read the job summary."
           exit 1

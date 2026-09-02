@@ -29,7 +29,8 @@ jobs:
       # the target directory. It wraps Swatinem/rust-cache.
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          # No `toolchain` input. The action then reads rust-toolchain.toml,
+          # which pins the version. See that file.
           components: rustfmt, clippy
 
       - name: Check formatting
@@ -37,7 +38,7 @@ jobs:
 
       # --all-targets also lints the test code.
       - name: Run clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --locked --all-targets -- -D warnings
 
   test:
     name: test on ${{ matrix.os }}
@@ -54,9 +55,9 @@ jobs:
 
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          toolchain: stable
+          # No `toolchain` input. rust-toolchain.toml pins the version.
           # Cache each platform under its own key.
           cache-key: ${{ matrix.os }}
 
       - name: Run tests
-        run: cargo test
+        run: cargo test --locked

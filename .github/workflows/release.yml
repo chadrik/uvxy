@@ -8,6 +8,8 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  # TEMPORARY: prove the pinning changes on the pull request. Remove after.
+  pull_request:
 
 permissions:
   contents: read
@@ -32,7 +34,10 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          args: --release --out dist
+          # Pin maturin. An unpinned action installs the newest maturin, and a
+          # new maturin can change the wheel that this workflow publishes.
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
           sccache: "true"
 
       # actions/upload-artifact v4 and later reject a repeated artifact name.
@@ -55,14 +60,17 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      # `manylinux: auto` selects the lowest compatible tag. maturin-action
-      # cross compiles inside a container, so this job needs no QEMU.
+      # maturin-action cross compiles inside a container, so this job needs
+      # no QEMU. The `manylinux` input names that container.
       - name: Build the wheel
         uses: PyO3/maturin-action@v1
         with:
           target: ${{ matrix.target }}
-          manylinux: auto
-          args: --release --out dist
+          # `2014` names the container. `auto` resolves a tag at build time,
+          # and that tag can change.
+          manylinux: "2014"
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
           sccache: "true"
 
       - uses: actions/upload-artifact@v7
@@ -89,7 +97,8 @@ jobs:
         with:
           target: ${{ matrix.target }}
           manylinux: musllinux_1_2
-          args: --release --out dist
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
           sccache: "true"
 
       - uses: actions/upload-artifact@v7
@@ -108,7 +117,8 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           target: x86_64-pc-windows-msvc
-          args: --release --out dist
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
           sccache: "true"
 
       - uses: actions/upload-artifact@v7
@@ -127,6 +137,7 @@ jobs:
         uses: PyO3/maturin-action@v1
         with:
           command: sdist
+          maturin-version: "1.15.0"
           args: --out dist
 
       - uses: actions/upload-artifact@v7
