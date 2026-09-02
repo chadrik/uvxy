@@ -1,0 +1,63 @@
+name: CI
+
+# A push to a branch that has an open pull request runs through the
+# pull_request event. Push therefore covers only the main branch.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  lint:
+    name: fmt and clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # This action installs the toolchain and caches the cargo registry and
+      # the target directory. It wraps Swatinem/rust-cache.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # No `toolchain` input. The action then reads rust-toolchain.toml,
+          # which pins the version. See that file.
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      # --all-targets also lints the test code.
+      - name: Run clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+  test:
+    name: test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # Do not cancel the other platforms when one platform fails. src/uvbin.rs
+      # holds separate Unix and Windows branches. A failure on one platform must
+      # not hide a failure on another.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          # No `toolchain` input. rust-toolchain.toml pins the version.
+          # Cache each platform under its own key.
+          cache-key: ${{ matrix.os }}
+
+      - name: Run tests
+        run: cargo test --locked

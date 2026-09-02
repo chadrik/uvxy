@@ -1,0 +1,213 @@
+name: Release
+
+# uvxy is a Rust binary. It does not link PyO3. maturin therefore tags one
+# `py3-none-<platform>` wheel per platform, and that wheel serves every Python
+# version. See docs/adr/0004.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # maturin reads the version from Cargo.toml, and it ignores the tag. A tag
+  # that disagrees with Cargo.toml therefore publishes the version that
+  # Cargo.toml names, and it reports nothing. A PyPI version is permanent, so
+  # this job runs before every build job.
+  version:
+    name: check the tag against Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the tag with the version
+        run: |
+          set -euo pipefail
+          crate=$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")
+          echo "Cargo.toml names $crate"
+
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "This run carries no tag, so it publishes nothing."
+            exit 0
+          fi
+
+          tag="${GITHUB_REF_NAME#v}"
+          echo "the tag names   $tag"
+
+          if [ "$crate" != "$tag" ]; then
+            echo "::error title=The tag and Cargo.toml disagree::The tag names $tag. Cargo.toml names $crate. maturin reads Cargo.toml, so this release would publish $crate. Correct Cargo.toml, or move the tag."
+            exit 1
+          fi
+          echo "The tag and Cargo.toml agree."
+
+  macos:
+    name: wheel for ${{ matrix.target }}
+    needs: version
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - aarch64-apple-darwin
+          - x86_64-apple-darwin
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          # Pin maturin. An unpinned action installs the newest maturin, and a
+          # new maturin can change the wheel that this workflow publishes.
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
+          sccache: "true"
+
+      # actions/upload-artifact v4 and later reject a repeated artifact name.
+      # Each matrix job therefore names its artifact after its target.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-wheel-macos-${{ matrix.target }}
+          path: dist
+          if-no-files-found: error
+
+  manylinux:
+    name: wheel for ${{ matrix.target }}
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v7
+
+      # maturin-action cross compiles inside a container, so this job needs
+      # no QEMU. The `manylinux` input names that container.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          # `2014` names the container. `auto` resolves a tag at build time,
+          # and that tag can change.
+          manylinux: "2014"
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-wheel-manylinux-${{ matrix.target }}
+          path: dist
+          if-no-files-found: error
+
+  musllinux:
+    name: wheel for ${{ matrix.target }}
+    needs: version
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-musl
+    steps:
+      - uses: actions/checkout@v7
+
+      # maturin-action builds a musl target in a rust-musl-cross container.
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: musllinux_1_2
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-wheel-musllinux-${{ matrix.target }}
+          path: dist
+          if-no-files-found: error
+
+  windows:
+    name: wheel for x86_64-pc-windows-msvc
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          target: x86_64-pc-windows-msvc
+          maturin-version: "1.15.0"
+          args: --release --locked --out dist
+          sccache: "true"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-wheel-windows-x86_64-pc-windows-msvc
+          path: dist
+          if-no-files-found: error
+
+  sdist:
+    name: sdist
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          maturin-version: "1.15.0"
+          args: --out dist
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-sdist
+          path: dist
+          if-no-files-found: error
+
+  publish:
+    name: publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [macos, manylinux, musllinux, windows, sdist]
+    # A manual run builds and uploads every artifact. Only a tag publishes.
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment:
+      name: pypi
+      url: https://pypi.org/p/uvxy
+    permissions:
+      # Trusted publishing needs this permission. The workflow holds no API
+      # token.
+      id-token: write
+    steps:
+      - name: Collect every wheel and the sdist
+        uses: actions/download-artifact@v8
+        with:
+          # Every build job names its artifact with a "dist-" prefix. One
+          # glob therefore collects the wheels and the sdist.
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+
+      # A reader of the run log needs the file list. It proves that all seven
+      # wheels and the sdist arrived.
+      - name: List the distributions
+        run: ls -l dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist
