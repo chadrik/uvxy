@@ -8,8 +8,6 @@ on:
     # Run every day at 06:17 UTC.
     - cron: "17 6 * * *"
   workflow_dispatch:
-  # TEMPORARY: prove the pinning changes on the pull request. Remove after.
-  pull_request:
 
 permissions:
   contents: read
