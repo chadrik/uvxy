@@ -69,9 +69,21 @@ pub fn config_paths() -> Vec<PathBuf> {
 ///
 /// Each key is a command. Each value is a package spec string. Match a key
 /// exactly, and never normalize it. Return an error when the text does not
-/// parse, when `[commands]` is not a table, or when a value is not a string.
+/// parse, when the file holds an unknown table, when `[commands]` is not a
+/// table, or when a value is not a string.
 pub fn parse(text: &str) -> anyhow::Result<Mappings> {
     let document: toml::Table = text.parse().context("the text is not valid TOML")?;
+
+    // uvxy reads a closed list of names, as uv does for `uv.toml`. uvxy
+    // rejects an unknown name rather than skip it. A skipped mapping runs the
+    // wrong package, and it reports nothing.
+    for key in document.keys() {
+        if key != "commands" {
+            return Err(anyhow!(
+                "`{key}` is not a name that uvxy reads. uvxy reads one table, and that table is `commands`."
+            ));
+        }
+    }
 
     // A file without a `[commands]` table holds no mapping. That is not an
     // error.
@@ -229,13 +241,13 @@ mod tests {
     }
 
     #[test]
-    fn parse_accepts_a_file_without_a_from_table() {
-        let text = "[other]\nkey = \"value\"\n";
+    fn parse_accepts_a_file_that_holds_only_comments() {
+        let text = "# uvxy reads no mapping from this file.\n";
         assert!(parse(text).unwrap().is_empty());
     }
 
     #[test]
-    fn parse_accepts_an_empty_from_table() {
+    fn parse_accepts_an_empty_commands_table() {
         assert!(parse("[commands]\n").unwrap().is_empty());
     }
 
@@ -253,6 +265,30 @@ mod tests {
         assert_eq!(result["Sphinx_Build"], "a");
         assert_eq!(result["sphinx-build"], "b");
         assert_eq!(result["sphinx.build"], "c");
+    }
+
+    #[test]
+    fn parse_rejects_an_unknown_table() {
+        let err = parse("[from]\nsphinx-build = \"sphinx\"\n")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("`from`"), "{err}");
+        assert!(err.contains("`commands`"), "{err}");
+    }
+
+    #[test]
+    fn parse_rejects_an_unknown_key_beside_a_good_table() {
+        let text = "[commands]\naws = \"awscli\"\n\n[extra]\nkey = 1\n";
+        let err = parse(text).unwrap_err().to_string();
+        assert!(err.contains("`extra`"), "{err}");
+    }
+
+    #[test]
+    fn parse_rejects_a_wrong_case_table() {
+        let err = parse("[Commands]\naws = \"awscli\"\n")
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("`Commands`"), "{err}");
     }
 
     #[test]

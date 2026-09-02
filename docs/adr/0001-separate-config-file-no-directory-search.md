@@ -37,6 +37,17 @@ configuration, and `UV_CONFIG_FILE`. A tool run is not scoped to a project.
 1. `uvxy mytool` means the same thing in every directory.
 2. A repository that you clone cannot redirect `uvxy black` to another package.
 
+## uvxy also rejects an unknown table
+
+uv reads a closed list of names, and it rejects every other name. `uvxy` copies
+that rule. `uvxy` reads one table, and that table is `commands`. Any other name
+produces an error.
+
+`uvxy` rejects the name rather than skip it. A skipped mapping does not stop the
+run. It runs uvx without a `--from`, and uvx then installs the package that
+carries the command's name. That package belongs to somebody else. An error
+costs the user one second. A wrong package costs more.
+
 ## Consequences
 
 - A project cannot pin a private command to a private package. Users who need

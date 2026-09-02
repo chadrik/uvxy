@@ -82,6 +82,9 @@ package provides the community collections, and it depends on `ansible-core`.
 dependency, and it prints a warning each time. Use `"ansible"` when you need the
 collections, and accept that warning.
 
+`uvxy` reads one table, and that table is `commands`. `uvxy` reports an error
+when the file holds any other name. uv applies the same rule to `uv.toml`.
+
 Each key is a command. Each value is a package spec. A package spec is the value
 that `uvxy` gives to `--from`, so it accepts any requirement that `--from`
 accepts, including a version:
