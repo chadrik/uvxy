@@ -8,6 +8,8 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  # TEMPORARY: prove the version guard wiring on the pull request. Remove after.
+  pull_request:
 
 permissions:
   contents: read
@@ -16,8 +18,39 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # maturin reads the version from Cargo.toml, and it ignores the tag. A tag
+  # that disagrees with Cargo.toml therefore publishes the version that
+  # Cargo.toml names, and it reports nothing. A PyPI version is permanent, so
+  # this job runs before every build job.
+  version:
+    name: check the tag against Cargo.toml
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Compare the tag with the version
+        run: |
+          set -euo pipefail
+          crate=$(python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")
+          echo "Cargo.toml names $crate"
+
+          if [ "${GITHUB_REF_TYPE}" != "tag" ]; then
+            echo "This run carries no tag, so it publishes nothing."
+            exit 0
+          fi
+
+          tag="${GITHUB_REF_NAME#v}"
+          echo "the tag names   $tag"
+
+          if [ "$crate" != "$tag" ]; then
+            echo "::error title=The tag and Cargo.toml disagree::The tag names $tag. Cargo.toml names $crate. maturin reads Cargo.toml, so this release would publish $crate. Correct Cargo.toml, or move the tag."
+            exit 1
+          fi
+          echo "The tag and Cargo.toml agree."
+
   macos:
     name: wheel for ${{ matrix.target }}
+    needs: version
     runs-on: macos-latest
     strategy:
       fail-fast: false
@@ -48,6 +81,7 @@ jobs:
 
   manylinux:
     name: wheel for ${{ matrix.target }}
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -79,6 +113,7 @@ jobs:
 
   musllinux:
     name: wheel for ${{ matrix.target }}
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -107,6 +142,7 @@ jobs:
 
   windows:
     name: wheel for x86_64-pc-windows-msvc
+    needs: version
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -127,6 +163,7 @@ jobs:
 
   sdist:
     name: sdist
+    needs: version
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
