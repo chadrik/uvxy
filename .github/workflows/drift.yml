@@ -1,0 +1,85 @@
+name: Drift
+
+# This workflow watches the uv completion format. uvxy reads flag arity from
+# `uv generate-shell-completion zsh`. See docs/adr/0002. A failure here means
+# that uv changed its completion format. It does not mean that uvxy changed.
+on:
+  schedule:
+    # Run every day at 06:17 UTC.
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  # The drift test skips itself unless this variable is set.
+  UVXY_DRIFT: "1"
+
+jobs:
+  drift:
+    name: uv completion format drift check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      # Always take the newest uv release. This workflow must see a format
+      # change on the day that uv ships it.
+      - name: Install the latest uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          version: latest
+
+      # Record the uv version. A reader of a failed run needs this value to
+      # find the release that changed the format.
+      - name: Record the uv version
+        id: uv-version
+        run: |
+          set -euo pipefail
+          uv --version
+          echo "version=$(uv --version)" >> "$GITHUB_OUTPUT"
+          echo "Tested against: \`$(uv --version)\`" >> "$GITHUB_STEP_SUMMARY"
+
+      # cargo test exits 0 when a filter matches no test. This step proves that
+      # a drift test exists. Without it the workflow can pass and monitor
+      # nothing.
+      - name: Confirm that a drift test exists
+        run: |
+          set -euo pipefail
+          cargo test --no-run
+          cargo test -- --list | tee test-list.txt
+          if ! grep -qi drift test-list.txt; then
+            echo "::error title=No drift test::cargo test lists no test with 'drift' in its name. This workflow monitors nothing. Add the drift test to tests/ or fix this workflow."
+            exit 1
+          fi
+
+      # Run the whole suite. The suite name of the drift test is not fixed, so
+      # a filter can miss it. UVXY_DRIFT=1 stops the drift test from skipping.
+      - name: Run the test suite against the current uv release
+        id: drift-test
+        run: cargo test -- --nocapture
+
+      - name: Report the drift failure
+        if: failure() && steps.drift-test.outcome == 'failure'
+        run: |
+          {
+            echo "## uv changed its completion format"
+            echo
+            echo "The drift check failed against uv \`${{ steps.uv-version.outputs.version }}\`."
+            echo
+            echo "uvxy reads flag arity from \`uv generate-shell-completion zsh\`."
+            echo "That output no longer yields a usable flag arity table."
+            echo
+            echo "Next steps:"
+            echo "1. Run \`uv generate-shell-completion zsh\` and read the new output."
+            echo "2. Update the parser in \`src/flags.rs\`."
+            echo "3. Update \`docs/adr/0002-derive-flag-arity-from-shell-completions.md\` if the approach no longer holds."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error title=uv changed its completion format::uvxy cannot build a flag table from uv ${{ steps.uv-version.outputs.version }}. Read the job summary."
+          exit 1
