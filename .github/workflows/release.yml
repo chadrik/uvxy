@@ -8,8 +8,6 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
-  # TEMPORARY: verify this workflow on the pull request. Remove before merge.
-  pull_request:
 
 permissions:
   contents: read

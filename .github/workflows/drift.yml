@@ -8,8 +8,6 @@ on:
     # Run every day at 06:17 UTC.
     - cron: "17 6 * * *"
   workflow_dispatch:
-  # TEMPORARY: verify this workflow on the pull request. Remove before merge.
-  pull_request:
 
 permissions:
   contents: read
